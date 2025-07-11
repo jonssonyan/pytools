@@ -1,11 +1,10 @@
 import os
 import re
-import subprocess
-import sys
 from pathlib import Path
 from typing import List, Callable
 
 import requests
+from PIL import Image
 from requests.exceptions import RequestException
 
 ##################################################
@@ -13,31 +12,20 @@ from requests.exceptions import RequestException
 ##################################################
 
 # 配置常量
-PNGQUANT_EXE = Path(sys.path[0]) / 'pngquant' / 'pngquant.exe'
-IMAGES_PATH_OUT = 'images'
-PNG_QUALITY = '80'
+IMAGES_PATH_OUT = 'images'  # 输出图片的根目录
+PNG_QUALITY = 85  # PNG压缩质量
+MAX_WIDTH = 1024  # 最大宽度限制
 TIMEOUT = 10  # 请求超时时间设置为10秒
 MAX_RETRIES = 3  # 下载失败重试次数
 
 
-# 图片压缩工具，需要自行下载
-# https://github.com/kornelski/pngquant?tab=readme-ov-file
-# pngquant.exe --force input.png --quality 80 -o input.png # 压缩80%的质量，直接覆盖压缩至原文件
-
-
-def compression(file_path: str) -> None:
-    """压缩图片文件"""
-    try:
-        subprocess.run(
-            [str(PNGQUANT_EXE), '--force', '--quality', PNG_QUALITY, '-o', file_path, file_path],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-    except subprocess.CalledProcessError as e:
-        print(f'压缩失败: {file_path}', e)
-    except FileNotFoundError:
-        print(f'压缩工具未找到: {PNGQUANT_EXE}')
+def compression(input_path, quality=PNG_QUALITY, max_width=MAX_WIDTH) -> None:
+    img = Image.open(input_path)
+    if img.width > max_width:
+        ratio = max_width / float(img.width)
+        new_height = int(float(img.height) * ratio)
+        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+    img.save(str(Path(input_path).with_suffix(".webp")), optimize=True, format="WEBP", quality=quality)
 
 
 def get_files_with_extension(folder_path: str, extension: str) -> List[str]:
@@ -103,7 +91,7 @@ def dynamic_replacement(matched_string: str, file_path: str, num: int) -> str:
     stem = file_path_obj.stem
 
     out_path = Path(IMAGES_PATH_OUT) / parent_name / stem
-    out_file_path = out_path / f'{num}.png'
+    out_file_path = out_path / f'{num}.webp'
 
     try:
         download_png(matched_string, str(out_file_path))
